@@ -80,13 +80,14 @@ func main() {
 	// dbs.SD = lib.Init("private", "pub_time", "name")
 	fmt.Println(dbs.Check())
 	dbs.Start() */
-	db := lib.NewDBSync("root:rootpwd@tcp(127.0.0.1:13306)/house", "root:rootpwd@tcp(127.0.0.1:13306)/house")
+	lib.Init()
+	db := lib.NewDBSync()
 	if db.Check() {
 		fmt.Println("ok")
 	}
-	db.AddFromCols("private", "pub_time", "owner", "xiaoqu_name")
-	db.AddToCols("private1", "pub_time", "owner", "xiaoqu_name")
-	db.AddCondition("pub_time > 2018-12")
+	db.AddFromCols("tb", "name")
+	db.AddToCols("tb1", "name")
+	// db.AddCondition("pub_time > 2018-12")
 	db.Start(100)
 	// defer db.Close()
 }

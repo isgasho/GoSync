@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"sync"
@@ -16,12 +17,12 @@ import (
 } */
 
 type SyncData struct {
-	tn   string
-	cols []string
+	db, tn string
+	cols   []string
 }
 type DBS struct {
-	from *sql.DB
-	to   []*sql.DB
+	dbc *sql.DB
+	SyncData
 }
 
 type Condition struct {
@@ -30,61 +31,55 @@ type Condition struct {
 	value string
 }
 type DBSync struct {
-	DBS
-	cols []SyncData
-	cond []Condition
-	wait *sync.WaitGroup
+	dbinfo []*DBS
+	cond   []Condition
+	wait   *sync.WaitGroup
 }
 
-func NewDBS(from string, to ...string) (dbs *DBS) {
+func Init() {
+	log.SetFlags(log.Ldate | log.Lshortfile)
+}
+func NewDBS(from, db, tn string, cols ...string) (dbs *DBS) {
 	frc, err := sql.Open("mysql", from)
 	if err != nil {
-		fmt.Println("NewDBS Error ", err)
+		log.Fatalln("NewDBS Error ", err)
 	}
-	odbs := make([]*sql.DB, len(to))
+	return &DBS{frc, SyncData{db, tn, cols}}
+}
+func NewDBSync(from *DBS, to ...*DBS) (obj *DBSync) {
+	var c bool = true
+	if err := from.dbc.Ping(); err != nil {
+		log.Println("From DB Connect Failed ", err)
+		c = false
+	}
 	for i, db := range to {
-		toc, err1 := sql.Open("mysql", db)
-		odbs[i] = toc
-		if err1 != nil {
-			fmt.Println(err1)
+		if err := db.dbc.Ping(); err != nil {
+			log.Printf("[%d] To DB Connect Failed. %s\n", i, err)
+			c = false
 		}
 	}
-	return &DBS{frc, odbs}
-}
-func (db *DBS) Close() {
-	db.from.Close()
-	for _, v := range db.to {
-		v.Close()
+	if !c {
+		log.Fatalln("Init Sync Failed,Exit.")
 	}
+	dbinfo := make([]*DBS, len(to)+1)
+	dbinfo[0] = from
+	dbinfo = append(dbinfo, to...)
+	// dbs := DBS{from, SyncData{}}
+	return &DBSync{dbinfo, make([]Condition, 0, 10), &sync.WaitGroup{}}
 }
-func NewDBSync(from, to string) (obj *DBSync) {
-	db := NewDBS(from, to)
-	if db == nil {
-		fmt.Println("Error happend NewDBSYnc")
-		return nil
+
+func (db *DBSync) Check() bool {
+	slen := len(db.dbinfo[0].cols)
+	fail := false
+	for i, db := range db.dbinfo[1:] {
+		if slen != len(db.cols) {
+			fail = true
+			log.Println("同步列数量不一致")
+		}
 	}
-	return &DBSync{*db, make([]SyncData, 1, 10), make([]Condition, 0, 10), &sync.WaitGroup{}}
-}
-func (obj *DBSync) AddFromCols(tn string, cols ...string) {
-	sd := SyncData{}
-	sd.tn = tn
-	sd.cols = cols
-	obj.cols[0] = sd
-}
-func (obj *DBSync) AddToCols(tn string, cols ...string) {
-	sd := SyncData{}
-	sd.tn = tn
-	sd.cols = cols
-	obj.cols = append(obj.cols, sd)
-}
-func (db *DBS) Check() bool {
-	if db.from.Ping() != nil {
+	if fail {
+		log.Println("检查同步出错.")
 		return false
-	}
-	for _, v := range db.to {
-		if v.Ping() != nil {
-			return false
-		}
 	}
 	return true
 }
