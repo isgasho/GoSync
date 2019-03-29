@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"time"
 
@@ -10,7 +9,7 @@ import (
 	"github.com/tonyupup/syncsql/lib"
 )
 
-func fff() {
+/* func fff() {
 	db, err := sql.Open("mysql", "root:rootpwd@tcp(127.0.0.1:13306)/house")
 	if err != nil {
 		fmt.Println(err)
@@ -29,7 +28,7 @@ func fff() {
 	}
 
 	// Make a slice for the values
-	values := make([]sql.RawBytes, len(columns))
+	values := make([]string, len(columns))
 
 	// rows.Scan wants '[]interface{}' as an argument, so we must copy the
 	// references into such a slice
@@ -64,7 +63,7 @@ func fff() {
 		panic(err.Error()) // proper error handling instead of panic in your app
 	}
 }
-
+*/
 func main() {
 	// ctx, cancel := context.WithCancel(context.Background())
 	// go watch(ctx, "【监控1】")
@@ -81,15 +80,14 @@ func main() {
 	fmt.Println(dbs.Check())
 	dbs.Start() */
 	lib.Init()
-	db := lib.NewDBSync()
-	if db.Check() {
-		fmt.Println("ok")
-	}
-	db.AddFromCols("tb", "name")
-	db.AddToCols("tb1", "name")
-	// db.AddCondition("pub_time > 2018-12")
+	frdb := lib.NewDBS("root:rootpwd@tcp(127.0.0.1:13306)/house", "house", "private1", "id", "owner", "phone")
+	todb := lib.NewDBS("root:rootpwd@tcp(127.0.0.1:13306)/house", "house", "private1", "id", "owner", "phone")
+	// todb1 := lib.NewDBS("root:rootpwd@tcp(127.0.0.1:13306)/house", "house", "private1", "id", "owner", "phone")
+
+	db := lib.NewDBSync(frdb, todb)
+	db.AddCondition("area > 50")
+	// db.Check()
 	db.Start(100)
-	// defer db.Close()
 }
 
 func watch(ctx context.Context, name string) {
