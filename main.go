@@ -79,12 +79,14 @@ func main() {
 	// dbs.SD = lib.Init("private", "pub_time", "name")
 	fmt.Println(dbs.Check())
 	dbs.Start() */
-	lib.Init()
-	frdb := lib.NewDBS("root:rootpwd@tcp(127.0.0.1:13306)/house", "house", "private1", "id", "owner", "phone")
-	todb := lib.NewDBS("root:rootpwd@tcp(127.0.0.1:13306)/house", "house", "private1", "id", "owner", "phone")
+	// lib.Init()
+	frdb := lib.NewDBS("root:rootpwd@tcp(127.0.0.1:13306)/house", "house", "private", "price", "unit_price", "owner", "phone", "area")
+	todb := lib.NewDBS("root:rootpwd@tcp(127.0.0.1:13306)/house", "house", "private1", "price", "unit_price", "owner", "phone", "area")
+	todb1 := lib.NewDBS("root:rootpwd@tcp(127.0.0.1:13306)/house", "house", "private2", "price", "unit_price", "owner", "phone", "area")
+
 	// todb1 := lib.NewDBS("root:rootpwd@tcp(127.0.0.1:13306)/house", "house", "private1", "id", "owner", "phone")
 
-	db := lib.NewDBSync(frdb, todb)
+	db := lib.NewDBSync(frdb, todb, todb1)
 	db.AddCondition("area > 50")
 	// db.Check()
 	db.Start(100)

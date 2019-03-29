@@ -144,16 +144,13 @@ func (db *DBSync) consum(ctx context.Context, ch chan []sql.RawBytes) {
 				vlu[i] = fmt.Sprintf("\"%s\"", string(s))
 			}
 			vlustr := strings.Join(vlu, ",")
-			for i, v := range db.destdb {
+			for _, v := range db.destdb {
 				cols := strings.Join(v.cols, ",")
 				s := fmt.Sprintf("INSERT INTO %s.`%s` (%s) VALUES (%s) ", v.db, v.tn, cols, vlustr)
-				re, err := v.Exec(s)
+				_, err := v.Exec(s)
 				if err != nil {
 					log.Println("Insert Error ", err)
 				}
-				log.Println(re)
-
-				log.Println(i, s, d)
 			}
 		}
 	}
