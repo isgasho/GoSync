@@ -6,7 +6,7 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/tonyupup/syncsql/lib"
+	"github.com/tonyupup/GoSync/lib"
 )
 
 /* func fff() {
