@@ -1,11 +1,8 @@
 package lib_test
 
 import (
-	_ "testing"
-
-	_ "github.com/tonyupup/syncsql/lib"
+	"testing"
 )
 
-/* func TestNewDBS(t *testing.T) {
-
-} */
+func TestNewDBSync(t *testing.T) {
+}

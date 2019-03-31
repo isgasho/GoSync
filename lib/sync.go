@@ -45,25 +45,29 @@ func NewDBS(from, db, tn string, cols ...string) (dbs *DBS) {
 	// defer frc.Close()
 	return &DBS{frc, SyncData{db, tn, cols}}
 }
-func NewDBSync(from *DBS, to ...*DBS) (obj *DBSync) {
-	var c bool = true
+
+func NewDBSync(from *DBS, to ...*DBS) (obj *DBSync, ok bool) {
+	ok = true
 	if err := from.Ping(); err != nil {
 		log.Println("From DB Connect Failed ", err)
-		c = false
+		ok = false
 	}
+	// from.SetMaxOpenConns(100)
 	for i, db := range to {
+		// db.SetMaxOpenConns(100)
 		if err := db.Ping(); err != nil {
 			log.Printf("[%d] To DB Connect Failed. %s\n", i, err)
-			c = false
+			ok = false
 		}
 	}
-	if !c {
+	if !ok {
 		log.Fatalln("Init Sync Failed,Exit.")
+		return nil, ok
 	}
 	dbinfo := make([]*DBS, len(to))
 	copy(dbinfo, to)
 	// dbs := DBS{from, SyncData{}}
-	return &DBSync{from, dbinfo, make([]Condition, 0, 10), &sync.WaitGroup{}}
+	return &DBSync{from, dbinfo, make([]Condition, 0, 10), &sync.WaitGroup{}}, ok
 }
 
 func (db *DBSync) Check() bool {
@@ -119,18 +123,21 @@ func (db *DBSync) getCondition() (condi, ordcom string) {
 		ordcom = " ORDER BY " + strings.Join(order, ",")
 	} else {
 		condi = ""
-		ordcom = " "
+		ordcom = ""
 	}
 	return
 }
-func (db *DBSync) count() (count int) {
+func (db *DBSync) count() (count, maxConnections int) {
+	var stmp string
 	condi, ordcom := db.getCondition()
 	coustr := fmt.Sprintf("SELECT COUNT(*) FROM %s.`%s` %s %s ", db.soudb.db, db.soudb.tn, condi, ordcom)
 	err := db.soudb.QueryRow(coustr).Scan(&count)
 	if err != nil {
 		panic(err.Error()) // proper error handling instead of panic in your app
 	}
-	return count
+	db.soudb.QueryRow("show variables like 'max_connections';").Scan(&stmp, &maxConnections)
+	log.Println("Count number :", count)
+	return
 }
 
 func (db *DBSync) consum(ctx context.Context, ch chan []sql.RawBytes) {
@@ -155,16 +162,16 @@ func (db *DBSync) consum(ctx context.Context, ch chan []sql.RawBytes) {
 		}
 	}
 }
-func (db *DBSync) product(i, step int) {
+func (db *DBSync) product(i, step int) bool {
 	condi, ordcom := db.getCondition()
 	cols := strings.Join(db.soudb.cols, ",")
 
 	selstr := fmt.Sprintf("SELECT %s FROM %s.`%s` %s %s LIMIT %d,%d", cols, db.soudb.db, db.soudb.tn, condi, ordcom, i, step)
-	rows, err := db.soudb.Query(selstr)
-	defer rows.Close()
+	rows, err := db.soudb.Query(selstr) //链接对象
+	defer rows.Close()                  //交还链接对象
 	if err != nil {
-		log.Fatalln("Count Error ", err)
-		return
+		log.Println("Select Error ", err, selstr)
+		return false
 	}
 	n := len(db.soudb.cols)
 
@@ -175,7 +182,7 @@ func (db *DBSync) product(i, step int) {
 	}
 
 	// var smap = make(map[string]interface{})
-	ch := make(chan []sql.RawBytes)
+	ch := make(chan []sql.RawBytes, 100)
 	ctx, cancel := context.WithCancel(context.Background())
 	go db.consum(ctx, ch)
 
@@ -193,12 +200,26 @@ func (db *DBSync) product(i, step int) {
 
 	}
 	cancel()
+	log.Println("End ", i+step)
 	db.wait.Done()
+	return true
 }
-
+func (db *DBSync) close() {
+	db.soudb.Close()
+	for i := 0; i < len(db.destdb); i++ {
+		db.destdb[i].Close()
+	}
+}
 func (db *DBSync) Start(step int) {
-	// ctx, cancel := context.WithCancel(context.Background())
-	count := db.count()
+	/*
+		优化连接数
+	*/
+	// defer db.close()
+	count, max := db.count()
+	max = max / 10 * 8
+	if step < count/max {
+		step = count / max
+	}
 	slice := count / step
 	for i := 0; i < slice+1; i++ {
 		go db.product(i*step, step)
